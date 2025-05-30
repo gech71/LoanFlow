@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -6,10 +5,7 @@ import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Briefcase, Users, TrendingUp, AlertTriangle, Loader2, AlertCircle } from "lucide-react";
-import { getLoanRequests } from '@/services/loan-service'; 
-import type { LoanRequest } from '@/types/loan';
-import { LoanStage } from '@/types/loan';
-import { subDays, parseISO, isAfter } from 'date-fns';
+import { subDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface DashboardStats {
@@ -18,6 +14,30 @@ interface DashboardStats {
   approvalRate: string; 
   overdueTasksCount: number;
 }
+
+interface LoanRequest {
+  id: string;
+  loanNumber: string;
+  customerNumber: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  loanAmount: number;
+  loanType: string;
+  loanPurpose: string;
+  currentStage: string;
+  submittedDate: Date;
+  lastUpdatedDate: Date;
+  assignedToId: string | null;
+  stageDeadline: Date | null;
+  isOverdue: boolean;
+  isReadyForManagerReview: boolean;
+}
+
+const LoanStage = {
+  REJECTED: 'REJECTED',
+  FUNDS_DISBURSED: 'FUNDS_DISBURSED',
+};
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -29,33 +49,33 @@ export default function DashboardPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await getLoanRequests(); 
-
-        if (result.error) {
-          console.error("Error from getLoanRequests service in Dashboard:", result.error, result); 
-          setError(result.error);
-        } else if (result.loans) {
-          const loans = result.loans;
-          const activeLoans = loans.filter(
-            loan => ![LoanStage.REJECTED, LoanStage.FUNDS_DISBURSED].includes(loan.currentStage)
-          ).length;
-
-          const sevenDaysAgo = subDays(new Date(), 7);
-          const newApplications = loans.filter(
-            loan => isAfter(parseISO(loan.submittedDate), sevenDaysAgo)
-          ).length;
-          
-          const overdueTasks = loans.filter(loan => loan.isOverdue).length;
-
-          setStats({
-            activeLoansCount: activeLoans,
-            newApplicationsCount: newApplications,
-            approvalRate: "78.5%", // Placeholder
-            overdueTasksCount: overdueTasks,
-          });
-        } else {
-          setError("No loan data received.");
+        // Call your API endpoint directly
+        const response = await fetch('/api/loan-requests');
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch loans');
         }
+
+        const { loans } = await response.json() as { loans: LoanRequest[] };
+        
+        const activeLoans = loans.filter(
+          loan => ![LoanStage.REJECTED, LoanStage.FUNDS_DISBURSED].includes(loan.currentStage)
+        ).length;
+
+        const sevenDaysAgo = subDays(new Date(), 7);
+        const newApplications = loans.filter(
+          loan => loan.submittedDate > sevenDaysAgo
+        ).length;
+        
+        const overdueTasks = loans.filter(loan => loan.isOverdue).length;
+
+        setStats({
+          activeLoansCount: activeLoans,
+          newApplicationsCount: newApplications,
+          approvalRate: "78.5%", // Placeholder
+          overdueTasksCount: overdueTasks,
+        });
       } catch (err: any) {
         console.error("Error fetching dashboard data:", err);
         const errorMessage = err.message || "An unexpected error occurred fetching dashboard data.";

@@ -1,0 +1,132 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema 
+// Accelerate integration: https://pris.ly/cli/accelerate-init 
+
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../src/generated/prisma"
+  binaryTargets = ["native", "rhel-openssl-1.1.x"] // For cross-platform compatibility
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // Enable Accelerate by configuring connection pooler in Platform Console
+}
+
+model Role {
+  id           String        @id @default(uuid())
+  name         String        @unique
+  description  String?
+  users        User[]
+  stageConfigs StageConfig[] // ✅ Added for StageConfig.targetRole
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model LoanStage {
+  id             String             @id @default(uuid())
+  name           String             @unique
+  description    String?
+  order          Int?
+  loanRequests   LoanRequest[]
+  historyEntries LoanHistoryEntry[] // ✅ Added for LoanHistoryEntry.stage
+  stageConfigs   StageConfig[] // ✅ Added for StageConfig.loanStage
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+}
+
+model User {
+  id             String             @id @default(uuid())
+  name           String
+  email          String             @unique
+  roleId         String?
+  role           Role?              @relation(fields: [roleId], references: [id])
+  assignedLoans  LoanRequest[]      @relation("AssignedLoans")
+  historyEntries LoanHistoryEntry[]
+
+  // Self-referencing relationship for manager-subordinate hierarchy
+  managerId    String?
+  manager      User?   @relation("UserManager", fields: [managerId], references: [id])
+  subordinates User[]  @relation("UserManager") // Subordinates under a user (e.g., Loan Officer under Manager)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LoanRequest {
+  id                      String             @id @default(uuid())
+  loanNumber              String             @unique
+  customerNumber          String             @unique
+  customerName            String
+  customerEmail           String
+  customerPhone           String
+  loanAmount              Decimal            @db.Decimal(18, 2)
+  loanType                String
+  loanPurpose             String
+  currentStageId          String?
+  currentStage            LoanStage?         @relation(fields: [currentStageId], references: [id])
+  submittedDate           DateTime
+  lastUpdatedDate         DateTime
+  assignedToId            String?
+  assignedTo              User?              @relation("AssignedLoans", fields: [assignedToId], references: [id])
+  stageDeadline           DateTime?
+  isOverdue               Boolean
+  isReadyForManagerReview Boolean
+  documents               LoanDocument[]
+  history                 LoanHistoryEntry[]
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+}
+
+model LoanDocument {
+  id            String      @id @default(uuid())
+  loanRequest   LoanRequest @relation(fields: [loanRequestId], references: [id])
+  loanRequestId String
+  name          String
+  status        String
+  notes         String?
+  uploadedAt    DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model LoanHistoryEntry {
+  id                 String      @id @default(uuid())
+  loanRequest        LoanRequest @relation(fields: [loanRequestId], references: [id])
+  loanRequestId      String
+  stageId            String?
+  stage              LoanStage?  @relation(fields: [stageId], references: [id]) // ✅ Now has opposite
+  timestamp          DateTime
+  userId             String?
+  user               User?       @relation(fields: [userId], references: [id])
+  userName           String
+  notes              String?
+  requiredFulfilment String?
+  ipAddress          String?     @db.Inet
+  createdAt          DateTime    @default(now())
+}
+
+model StageConfig {
+  id                  String                   @id @default(uuid())
+  name                String
+  loanStageId         String?
+  loanStage           LoanStage?               @relation(fields: [loanStageId], references: [id]) // ✅ Now has opposite
+  defaultTimelineDays Int
+  targetRoleId        String?
+  targetRole          Role?                    @relation(fields: [targetRoleId], references: [id]) // ✅ Now has opposite
+  percentageWeight    Int
+  requiredDocuments   RequiredDocumentConfig[]
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+}
+
+model RequiredDocumentConfig {
+  id            String      @id @default(uuid())
+  stageConfig   StageConfig @relation(fields: [stageConfigId], references: [id])
+  stageConfigId String
+  name          String
+  isMandatory   Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}

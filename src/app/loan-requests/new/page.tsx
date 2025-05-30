@@ -1,4 +1,3 @@
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -21,10 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from 'next/navigation';
 import { DollarSign, User as UserIcon, Mail, Phone, Type, Info, Loader2 } from 'lucide-react'; 
 import React, { useState } from 'react';
-import { addLoanRequest } from '@/services/loan-service'; 
-import type { LoanRequest } from '@/types/loan'; 
 
-// Removed assignedTo from schema
 const loanRequestFormSchema = z.object({
   customerName: z.string().min(2, {
     message: 'Customer name must be at least 2 characters.',
@@ -55,7 +51,7 @@ export default function NewLoanRequestPage() {
 
   const form = useForm<LoanRequestFormValues>({
     resolver: zodResolver(loanRequestFormSchema),
-    defaultValues: { // Removed assignedTo from defaultValues
+    defaultValues: {
       customerName: '',
       customerEmail: '',
       customerPhone: '',
@@ -67,49 +63,36 @@ export default function NewLoanRequestPage() {
 
   async function onSubmit(data: LoanRequestFormValues) {
     setIsSubmitting(true);
+    
     try {
-      // Prepare data for service; assignedTo is no longer included from the form
-      const loanDataForService: Omit<LoanRequest, 'id' | 'submittedDate' | 'lastUpdatedDate' | 'history' | 'currentStage' | 'documents' | 'isOverdue' | 'loanNumber' | 'customerNumber' | 'stageDeadline' | 'assignedTo'> = {
-        customerName: data.customerName,
-        customerEmail: data.customerEmail,
-        customerPhone: data.customerPhone,
-        loanAmount: data.loanAmount,
-        loanType: data.loanType,
-        loanPurpose: data.loanPurpose,
-      };
-      
-      const result = await addLoanRequest(loanDataForService); 
+      // Call your API endpoint directly
+      const response = await fetch('/api/loan-requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
 
-      if (result.error) {
-        toast({
-          title: "Submission Error",
-          description: `Failed to save loan request: ${result.error}`,
-          variant: "destructive",
-        });
-         console.error("Full error result from addLoanRequest service on client:", result);
-      } else if (result.id) {
-        toast({
-          title: "Loan Request Submitted (Mock)",
-          description: `Request for ${data.customerName} has been submitted with ID: ${result.id}. It is currently unassigned.`,
-        });
-        form.reset();
-        router.push('/loan-process');
-      } else {
-         toast({
-          title: "Submission Error",
-          description: "An unexpected issue occurred with submission (Mock).",
-          variant: "destructive",
-        });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create loan');
       }
-    } catch (error: any) { 
-      console.error("Client-side error during loan request submission (outer catch):", error);
-      console.error("Error name:", error?.name);
-      console.error("Error message:", error?.message);
-      console.error("Error stack:", error?.stack);
-      console.error("Full error object (client):", error);
+
+      const result = await response.json();
+      
       toast({
-        title: "Submission System Error (Mock)",
-        description: `A client-side error occurred: ${error?.message || 'Please try again.'}. Check server terminal logs for more details if this persists.`,
+        title: "Loan Request Submitted",
+        description: `Request for ${data.customerName} has been submitted with ID: ${result.id}.`,
+      });
+      
+      form.reset();
+      // router.push('/loan-process');
+    } catch (error: any) {
+      console.error("Submission error:", error);
+      toast({
+        title: "Submission Error",
+        description: error.message || 'Please try again.',
         variant: "destructive",
       });
     } finally {
@@ -214,7 +197,6 @@ export default function NewLoanRequestPage() {
                     </FormItem>
                   )}
                 />
-                {/* Removed Assignee Dropdown Field */}
               </div>
               
               <FormField
