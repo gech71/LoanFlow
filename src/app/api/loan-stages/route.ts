@@ -1,40 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/db";
+// app/api/loan-stages/route.ts
+import { NextResponse } from 'next/server';
+import prisma from '@/lib/db';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const withLoans = req.nextUrl.searchParams.get("withLoans");
-    if (withLoans) {
-      // Get all stages with their associated loans, ordered
-      const stages = await prisma.loanStage.findMany({
-        orderBy: { order: "asc" },
-        include: {
-          loanRequests: {
-            orderBy: { submittedDate: "asc" },
-            include: {
-              assignedTo: true,
-              documents: true,
-              history: {
-                include: { user: true },
-                orderBy: { timestamp: "desc" },
-              },
-            },
-          },
-        },
-      });
-      // Rename loanRequests to loans for frontend compatibility
-      const result = stages.map((stage) => ({
-        ...stage,
-        loans: stage.loanRequests,
-        loanRequests: undefined,
-      }));
-      return NextResponse.json({ stages: result });
-    } else {
-      // Just return stages
-      const stages = await prisma.loanStage.findMany({ orderBy: { order: "asc" } });
-      return NextResponse.json({ stages });
-    }
+    const stages = await prisma.loanStage.findMany({
+      orderBy: { order: 'asc' }
+    });
+    return NextResponse.json(stages);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch loan stages: " + error.message },
+      { status: 500 }
+    );
   }
 }

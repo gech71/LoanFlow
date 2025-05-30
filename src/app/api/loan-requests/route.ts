@@ -49,9 +49,38 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   try {
-    const loans = await prisma.loanRequest.findMany();
-    return NextResponse.json({ loans });
+    const loans = await prisma.loanRequest.findMany({
+      include: {
+        currentStage: true,
+        assignedTo: true,
+        documents: true,
+        history: {
+          include: {
+            stage: true,
+            user: true
+          },
+          orderBy: { timestamp: 'desc' }
+        }
+      },
+      orderBy: { lastUpdatedDate: 'desc' }
+    });
+
+    // Calculate isOverdue for each loan
+    const processedLoans = loans.map(loan => {
+      const isOverdue = loan.stageDeadline ? 
+        loan.stageDeadline.getTime() < new Date().getTime() && 
+        loan.currentStage?.name !== 'FUNDS_DISBURSED' && 
+        loan.currentStage?.name !== 'REJECTED' : 
+        false;
+
+      return { ...loan, isOverdue };
+    });
+
+    return NextResponse.json({ loans: processedLoans });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch loans: " + error.message },
+      { status: 500 }
+    );
   }
 }
